@@ -37,7 +37,8 @@ def initializePlugin(plugin):
         cmds.menu('MukaiLab', label='MukaiLab')
     cmds.setParent('MukaiLab', menu=True)
     if not cmds.menu('SSDR', query=True, exists=True):
-        cmds.menuItem('SSDR', label='SSDR', tearOff=True, command='import maya.mel;maya.mel.eval("ssdrBuild")')
+        wd = ssdrUIWindow()
+        cmds.menuItem('SSDR', command=wd.showWindow)
 
 def uninitializePlugin(plugin):
     fnPlugin = om.MFnPlugin(plugin)
@@ -48,18 +49,45 @@ def uninitializePlugin(plugin):
         raise
     cmds.deleteUI('MayaWindow|MukaiLab|SSDR', menuItem=True)
 
+class ssdrUIWindow():
+
+    def __init__(self):
+        self.bones = 50
+        self.iteration = 20
+        self.influence = 8
+
+    def generate(self, value):
+        self.bones = cmds.intField(self.bn, query=True, value=True)
+        self.iteration = cmds.intField(self.it, query=True, value=True)
+        self.influence = cmds.intField(self.inf, query=True, value=True)
+        command = "ssdrBuild %d %d %d" % (self.bones, self.iteration, self.influence)
+        print command
+        maya.mel.eval(command)
+
+    def showWindow(self, plugin):
+        cmds.window(title='Test Window')
+        column = cmds.columnLayout()
+        cmds.separator( height=10)
+        cmds.rowLayout(nc=2, columnWidth2=(100, 100))
+        cmds.text( label='Bones' )
+        self.bn = cmds.intField('Bones', value = 50)
+        cmds.setParent(column)
+        cmds.separator( height=10)
+        cmds.rowLayout(nc=2, columnWidth2=(100, 100))
+        cmds.text( label='Iteraion' )
+        self.it = cmds.intField('Iteraion', value = 20)
+        cmds.setParent(column)
+        cmds.separator( height=10)
+        cmds.rowLayout(nc=2, columnWidth2=(100, 100))
+        cmds.text( label='MaxInfluenceBones' )
+        self.inf = cmds.intField('MaxInfluenceBones',  value = 8)
+        cmds.setParent(column)
+        cmds.separator( height=10)
+        cmds.button(label="Generate!", width=200, c=self.generate)
+        cmds.showWindow()
+
 class ssdrBuildCmd(om.MPxCommand):
     commandName = 'ssdrBuild'
-
-    # 最小ボーン数
-    # - 指定した数以上のボーンは必ず利用される。また、ボーン数は基本的に2のべき乗になることが多い
-    # 　（例： numBones=10 としたときは、10より大きい2のべき乗=2^4=16となることが多い）
-    numMinBones = 16
-    # 計算反復回数は、ボーン数に応じて適当に設定。
-    #   あまり回数を増やしてもさほど影響は生じないことが多い。
-    numMaxIterations = 20
-    # 各頂点あたりの最大インフルーエンス数
-    numMaxInfluences = 4
 
     def __init__(self):
         om.MPxCommand.__init__(self)
@@ -69,6 +97,16 @@ class ssdrBuildCmd(om.MPxCommand):
         return ssdrBuildCmd()
 
     def doIt(self, args):
+        # 最小ボーン数
+        # - 指定した数以上のボーンは必ず利用される。また、ボーン数は基本的に2のべき乗になることが多い
+        # 　（例： numBones=10 としたときは、10より大きい2のべき乗=2^4=16となることが多い）
+        self.numMinBones = args.asInt(0)
+        # 計算反復回数は、ボーン数に応じて適当に設定。
+        # あまり回数を増やしてもさほど影響は生じないことが多い。
+        self.numMaxIterations = args.asInt(1)
+        # 各頂点あたりの最大インフルーエンス数
+        self.numMaxInfluences = args.asInt(2)
+
         # メッシュの取得
         dagPath = om.MGlobal.getActiveSelectionList().getDagPath(0)
         meshFn = om.MFnMesh(dagPath)
